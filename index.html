@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MET4 Surf</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,800;0,900;1,900&display=swap');
+        
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background-color: #1e1b4b; /* Fallback */
+            background-image: url('https://iili.io/nyeyRGs.md.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            font-family: 'Montserrat', sans-serif; 
+            touch-action: none; 
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        
+        #game-canvas { 
+            display: block; 
+            width: 100vw; 
+            height: 100vh; 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            z-index: 1; 
+        }
+        
+        .ui-layer { 
+            position: absolute; 
+            inset: 0; 
+            z-index: 10; 
+            pointer-events: none;
+        }
+        
+        .pointer-events-auto { pointer-events: auto; }
+        
+        /* Vibrant UI Themes */
+        .glass-panel {
+            background: rgba(30, 27, 75, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(139, 92, 246, 0.1);
+        }
+        
+        .text-glow-blue { text-shadow: 0 0 15px rgba(56, 189, 248, 0.8); }
+        .text-glow-pink { text-shadow: 0 0 15px rgba(236, 72, 153, 0.8); }
+        .text-glow-yellow { text-shadow: 0 0 15px rgba(250, 204, 21, 0.8); }
+        
+        /* 3D Button Styles */
+        .btn-3d {
+            transition: all 0.1s ease;
+            position: relative;
+            transform: translateY(0);
+            box-shadow: 0 6px 0 0 rgba(0,0,0,0.4);
+        }
+        .btn-3d:active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0 0 rgba(0,0,0,0.4);
+        }
+        
+        .btn-play { background: linear-gradient(to bottom, #34d399, #10b981); border: 2px solid #6ee7b7; box-shadow: 0 6px 0 0 #047857; color: white; }
+        .btn-play:active { box-shadow: 0 2px 0 0 #047857; }
+        
+        .btn-shop { background: linear-gradient(to bottom, #a78bfa, #8b5cf6); border: 2px solid #c4b5fd; box-shadow: 0 6px 0 0 #5b21b6; color: white; }
+        .btn-shop:active { box-shadow: 0 2px 0 0 #5b21b6; }
+
+        .btn-action { background: linear-gradient(to bottom, #38bdf8, #0ea5e9); border: 2px solid #7dd3fc; box-shadow: 0 6px 0 0 #0369a1; color: white; }
+        .btn-action:active { box-shadow: 0 2px 0 0 #0369a1; }
+        
+        .btn-disabled { background: #475569; border: 2px solid #64748b; box-shadow: 0 6px 0 0 #1e293b; color: #94a3b8; transform: translateY(4px); box-shadow: 0 2px 0 0 #1e293b; pointer-events: none; }
+
+        /* Intro Animation */
+        #intro-screen {
+            background: linear-gradient(135deg, #1e1b4b, #312e81, #4c1d95);
+            transition: opacity 0.8s ease-in-out;
+        }
+        .logo-anim {
+            animation: zoomIn 1.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        @keyframes zoomIn {
+            0% { transform: scale(0.1); opacity: 0; filter: blur(10px); }
+            50% { transform: scale(1.1); opacity: 1; filter: blur(0px); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Coin Spin Animation in UI */
+        .coin-icon { animation: spin 3s linear infinite; }
+        @keyframes spin { 100% { transform: rotateY(360deg); } }
+
+        /* Custom Scrollbar */
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body>
+
+    <!-- 3D Game Canvas -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- BGM & SFX Audio -->
+    <audio id="bgm" loop preload="auto">
+        <source src="https://github.com/ethical-hex-nicks/MEt4-Surfer/raw/refs/heads/main/ssstik.io_1794577427462.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="sfx-crash" preload="auto">
+        <source src="https://github.com/ethical-hex-nicks/MEt4-Surfer/raw/refs/heads/main/ssstik.io_1794577601426.mp3" type="audio/mpeg">
+    </audio>
+    
+    <button id="btn-mute" class="absolute top-4 right-4 z-[100] w-12 h-12 glass-panel rounded-full flex items-center justify-center text-2xl drop-shadow-lg transition-transform hover:scale-110 pointer-events-auto">
+        🔊
+    </button>
+
+    <!-- INTRO SCREEN -->
+    <div id="intro-screen" class="absolute inset-0 z-50 flex items-center justify-center flex-col pointer-events-auto">
+        <div class="logo-anim text-center">
+            <h1 class="text-7xl sm:text-9xl font-black italic tracking-tighter text-white drop-shadow-[0_0_30px_rgba(56,189,248,1)]">
+                <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-600">MET4</span>
+            </h1>
+            <h2 class="text-5xl sm:text-7xl font-black italic tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-purple-600 drop-shadow-[0_0_20px_rgba(236,72,153,0.8)] -mt-4">
+                SURF
+            </h2>
+        </div>
+        <div class="mt-12 w-48 h-2 bg-indigo-900 rounded-full overflow-hidden">
+            <div class="h-full bg-cyan-400 shadow-[0_0_10px_#22d3ee] w-0 animate-[loading_1.5s_ease-in-out_forwards]"></div>
+        </div>
+        <style>@keyframes loading { 100% { width: 100%; } }</style>
+    </div>
+
+    <!-- UI LAYER -->
+    <div class="ui-layer flex flex-col justify-between">
+        
+        <!-- HUD (Score & Coins) -->
+        <div id="hud" class="hidden p-4 sm:p-6 flex justify-between items-start w-full">
+            <div class="glass-panel px-6 py-2 rounded-2xl flex flex-col items-center">
+                <span class="text-xs text-sky-300 font-bold uppercase tracking-widest">Score</span>
+                <span class="text-3xl font-black text-white text-glow-blue" id="hud-score">0</span>
+            </div>
+            <div class="glass-panel px-6 py-2 rounded-2xl flex flex-col items-center">
+                <span class="text-xs text-yellow-300 font-bold uppercase tracking-widest">Coins</span>
+                <div class="flex items-center gap-2">
+                    <div class="w-6 h-6 rounded-full bg-yellow-400 border-2 border-yellow-200 shadow-[0_0_10px_#facc15] coin-icon"></div>
+                    <span class="text-3xl font-black text-white text-glow-yellow" id="hud-coins">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- MAIN MENU -->
+        <div id="main-menu" class="hidden pointer-events-auto absolute inset-0 flex flex-col items-center justify-center bg-indigo-950/40 backdrop-blur-sm">
+            <div class="text-center mb-10">
+                <h1 class="text-7xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-600 drop-shadow-[0_0_15px_rgba(56,189,248,0.5)]">MET4</h1>
+                <h2 class="text-5xl font-black italic tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-purple-600 drop-shadow-[0_0_15px_rgba(236,72,153,0.5)] -mt-2">SURF</h2>
+            </div>
+            
+            <div class="flex flex-col gap-5 w-64">
+                <button id="btn-play" class="btn-3d btn-play py-4 rounded-xl text-2xl font-black italic tracking-wider text-center flex justify-center items-center gap-2">
+                    TAP TO PLAY
+                </button>
+                <button id="btn-shop" class="btn-3d btn-shop py-3 rounded-xl text-xl font-bold uppercase tracking-widest text-center">
+                    CHARACTER SHOP
+                </button>
+            </div>
+        </div>
+
+        <!-- SHOP MENU -->
+        <div id="shop-menu" class="hidden pointer-events-auto absolute inset-0 flex flex-col items-center justify-center bg-indigo-950/80 backdrop-blur-md">
+            <div class="glass-panel w-[95%] max-w-5xl h-[85vh] rounded-3xl p-6 flex flex-col relative border-t-4 border-pink-500">
+                
+                <!-- Header -->
+                <div class="flex justify-between items-center mb-6 pb-4 border-b border-indigo-500/50">
+                    <h2 class="text-4xl font-black italic text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-purple-500 text-glow-pink">SURFERS</h2>
+                    <div class="flex items-center gap-3 bg-indigo-900/80 px-4 py-2 rounded-xl border border-indigo-400/30">
+                        <div class="w-6 h-6 rounded-full bg-yellow-400 border-2 border-yellow-200 coin-icon"></div>
+                        <span class="text-2xl font-black text-yellow-400" id="shop-coins-total">0</span>
+                    </div>
+                </div>
+                
+                <!-- Characters Grid -->
+                <div id="shop-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 w-full overflow-y-auto pb-6 scrollbar-hide flex-grow">
+                    <!-- Cards injected by JS -->
+                </div>
+
+                <!-- Footer -->
+                <div class="mt-4 pt-4 border-t border-indigo-500/50 flex justify-center w-full">
+                    <button id="btn-shop-back" class="btn-3d btn-action w-full max-w-sm py-3 rounded-xl text-xl font-bold uppercase tracking-widest">
+                        BACK TO MENU
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- GAME OVER MENU -->
+        <div id="game-over-menu" class="hidden pointer-events-auto absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div class="glass-panel rounded-3xl p-8 flex flex-col items-center gap-6 w-[90%] max-w-sm text-center border-t-4 border-cyan-400">
+                <h1 class="text-5xl font-black italic text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]">WASTED</h1>
+                
+                <div class="w-full bg-indigo-900/60 rounded-2xl p-6 border border-indigo-400/30">
+                    <p class="text-indigo-200 font-bold uppercase tracking-widest text-sm mb-1">Total Score</p>
+                    <p class="text-5xl font-black text-cyan-400 text-glow-blue mb-4" id="go-score">0</p>
+                    
+                    <div class="h-px w-full bg-indigo-500/50 my-4"></div>
+                    
+                    <div class="flex justify-between items-center">
+                        <p class="text-indigo-200 font-bold uppercase tracking-widest text-sm">Coins</p>
+                        <div class="flex items-center gap-2">
+                            <div class="w-5 h-5 rounded-full bg-yellow-400 border border-yellow-200"></div>
+                            <p class="text-2xl font-black text-yellow-400" id="go-coins">+0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="w-full flex flex-col gap-3 mt-2">
+                    <button id="btn-restart" class="btn-3d btn-play w-full py-4 rounded-xl text-2xl font-black italic tracking-wider">
+                        RUN AGAIN
+                    </button>
+                    <button id="btn-menu" class="btn-3d bg-slate-700 w-full py-3 rounded-xl text-sm font-bold text-white uppercase tracking-widest">
+                        HOME
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+
+    <!-- GAME ENGINE SCRIPT -->
+    <script>
+        /**
+         * MET4 SURF - CORE ENGINE (Three.js + Logic)
+         */
+
+        // --- 1. DATA & ROSTER CONFIGURATION ---
+        const characters = [
+            { id: 0, name: "Sydney Ricafort", url: "https://iili.io/nyeWEf2.png", price: 0, unlocked: true },
+            { id: 1, name: "John Patrick Campos", url: "https://iili.io/nyeho3N.png", price: 100, unlocked: false },
+            { id: 2, name: "Vincent Castillo", url: "https://iili.io/nyeEk8u.png", price: 500, unlocked: false },
+            { id: 3, name: "Engilbert Mercado", url: "https://iili.io/nyeMzzv.png", price: 1000, unlocked: false }
+        ];
+
+        // Persistence
+        let totalCoins = parseInt(localStorage.getItem('met4_total_coins')) || 0;
+        let selectedCharId = parseInt(localStorage.getItem('met4_selected_char')) || 0;
+        const unlockedStorage = JSON.parse(localStorage.getItem('met4_unlocked_chars')) || [0];
+        unlockedStorage.forEach(id => {
+            const char = characters.find(c => c.id === id);
+            if(char) char.unlocked = true;
+        });
+
+        // Game State Variables
+        let gameState = 'intro'; // intro, menu, shop, playing, gameover
+        let sessionScore = 0;
+        let sessionCoins = 0;
+
+        // UI Elements
+        const ui = {
+            intro: document.getElementById('intro-screen'),
+            menu: document.getElementById('main-menu'),
+            shop: document.getElementById('shop-menu'),
+            hud: document.getElementById('hud'),
+            gameOver: document.getElementById('game-over-menu'),
+            hudScore: document.getElementById('hud-score'),
+            hudCoins: document.getElementById('hud-coins'),
+            goScore: document.getElementById('go-score'),
+            goCoins: document.getElementById('go-coins'),
+            shopCoins: document.getElementById('shop-coins-total'),
+            shopGrid: document.getElementById('shop-grid'),
+            bgm: document.getElementById('bgm'),
+            sfxCrash: document.getElementById('sfx-crash'),
+            btnMute: document.getElementById('btn-mute')
+        };
+
+        // --- AUDIO ENGINE ---
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioContext();
+        let isMuted = false;
+
+        function playTone(freq, type, duration, vol=0.1) {
+            if (isMuted) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+
+        const sfx = {
+            jump: () => {
+                if(isMuted) return;
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+            },
+            coin: () => {
+                playTone(987.77, 'square', 0.1, 0.1); 
+                setTimeout(() => playTone(1318.51, 'square', 0.15, 0.1), 50); 
+            },
+            crash: () => {
+                if (isMuted) return;
+                ui.sfxCrash.currentTime = 0;
+                ui.sfxCrash.play().catch(e => console.log("Crash audio prevented"));
+            },
+            click: () => playTone(600, 'sine', 0.1, 0.2)
+        };
+
+        ui.btnMute.addEventListener('click', () => {
+            isMuted = !isMuted;
+            ui.btnMute.innerText = isMuted ? '🔇' : '🔊';
+            if (isMuted) {
+                ui.bgm.pause();
+                ui.sfxCrash.pause();
+            } else if (gameState === 'playing') {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                ui.bgm.play().catch(e=>console.log("BGM play prevented"));
+            }
+            sfx.click();
+        });
+
+        // Add click sound to all action buttons
+        document.querySelectorAll('.btn-3d').forEach(btn => {
+            btn.addEventListener('click', () => sfx.click());
+        });
+
+        // --- 2. THREE.JS SCENE SETUP ---
+        const canvas = document.getElementById('game-canvas');
+        const scene = new THREE.Scene();
+        
+        // Remove solid color background so CSS background shines through
+        // scene.background = new THREE.Color(0x312e81);
+        
+        // Keep fog to blend the track smoothly into the horizon
+        scene.fog = new THREE.Fog(0x312e81, 40, 140);
+
+        const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 200);
+        camera.position.set(0, 5, 10);
+        camera.lookAt(0, 1, -10);
+
+        // Add alpha: true to make the canvas background transparent
+        const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(ambientLight);
+        
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(-10, 20, 10);
+        dirLight.castShadow = true;
+        dirLight.shadow.camera.left = -15;
+        dirLight.shadow.camera.right = 15;
+        dirLight.shadow.camera.top = 20;
+        dirLight.shadow.camera.bottom = -20;
+        dirLight.shadow.camera.far = 100;
+        scene.add(dirLight);
+
+        // Ground/Track
+        const trackGeo = new THREE.PlaneGeometry(30, 300);
+        const trackMat = new THREE.MeshStandardMaterial({ color: 0x1e1b4b, roughness: 0.1, metalness: 0.2 });
+        const track = new THREE.Mesh(trackGeo, trackMat);
+        track.rotation.x = -Math.PI / 2;
+        track.position.z = -100;
+        track.receiveShadow = true;
+        scene.add(track);
+
+        // Grid lines for speed illusion
+        const gridHelper = new THREE.GridHelper(300, 150, 0x8b5cf6, 0x38bdf8);
+        gridHelper.position.y = 0.05;
+        gridHelper.position.z = -50;
+        scene.add(gridHelper);
+
+        // --- 3. PLAYER ENTITY ---
+        const LANE_WIDTH = 3.5;
+        const playerSize = { w: 1.2, h: 2.2, d: 1.2 };
+        const playerGeo = new THREE.BoxGeometry(playerSize.w, playerSize.h, playerSize.d);
+        playerGeo.translate(0, playerSize.h / 2, 0); // Pivot at bottom center
+        
+        const playerMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
+        const player = new THREE.Mesh(playerGeo, playerMat);
+        player.castShadow = true;
+        scene.add(player);
+        const playerBox = new THREE.Box3();
+
+        // Texture Loader Logic (Critical for images)
+        const textureLoader = new THREE.TextureLoader();
+        textureLoader.setCrossOrigin('anonymous'); // Prevents CORS Canvas Tainting
+
+        function updatePlayerTexture() {
+            const char = characters.find(c => c.id === selectedCharId);
+            
+            // Temporary color while loading
+            playerMat.map = null;
+            playerMat.color.setHex(0xa78bfa); 
+            playerMat.needsUpdate = true;
+
+            // Load remote image and apply
+            textureLoader.load(
+                char.url,
+                (texture) => {
+                    texture.colorSpace = THREE.SRGBColorSpace;
+                    playerMat.map = texture;
+                    playerMat.color.setHex(0xffffff); // Ensure base color is white to show texture properly
+                    playerMat.needsUpdate = true;
+                },
+                undefined,
+                (err) => console.error("Error loading texture for:", char.name, err)
+            );
+        }
+
+        // --- 4. GAMEPLAY MECHANICS & SPAWNING ---
+        
+        // Physics / Movement state
+        let currentSpeed = 0.5;
+        const BASE_SPEED = 0.5;
+        let speedMultiplier = 1;
+        let targetLane = 0; // -1, 0, 1
+        
+        let isJumping = false;
+        let isDucking = false;
+        let velocityY = 0;
+        const GRAVITY = 0.025;
+        const JUMP_POWER = 0.42;
+        let duckTimer = 0;
+
+        // Object Pools
+        let obstacles = [];
+        let coinsList = [];
+        
+        // Shared Geometries/Materials to optimize rendering
+        const obsGeo = new THREE.BoxGeometry(LANE_WIDTH - 0.4, 2.5, 2);
+        obsGeo.translate(0, 1.25, 0);
+        const obsMat = new THREE.MeshStandardMaterial({ color: 0xf43f5e, emissive: 0x881337, roughness: 0.2 });
+        
+        const coinGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.15, 16);
+        coinGeo.translate(0, 0.5, 0);
+        const coinMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0x854d0e, metalness: 0.8, roughness: 0.1 });
+
+        function initGame() {
+            sessionScore = 0;
+            sessionCoins = 0;
+            currentSpeed = BASE_SPEED;
+            speedMultiplier = 1;
+            targetLane = 0;
+            isJumping = false;
+            isDucking = false;
+            duckTimer = 0;
+            velocityY = 0;
+            
+            player.position.set(0, 0, 0);
+            player.scale.set(1, 1, 1);
+            player.rotation.set(0, 0, 0);
+
+            // Clean up scene
+            obstacles.forEach(o => scene.remove(o.mesh));
+            coinsList.forEach(c => scene.remove(c.mesh));
+            obstacles = [];
+            coinsList = [];
+
+            updatePlayerTexture();
+            updateHUD();
+        }
+
+        function updateHUD() {
+            ui.hudScore.innerText = Math.floor(sessionScore);
+            ui.hudCoins.innerText = sessionCoins;
+        }
+
+        // Procedural Generation
+        function spawnWorldRow() {
+            const spawnZ = -130; 
+            const lanes = [-1, 0, 1].sort(() => Math.random() - 0.5); 
+            
+            const rand = Math.random();
+            if (rand < 0.65) {
+                // Spawn Obstacles
+                const numObs = Math.random() > 0.8 ? 2 : 1; // 1 or 2 barriers
+                for(let i=0; i<numObs; i++) createObstacle(lanes[i], spawnZ);
+                // Spawn coins in a safe lane
+                if (Math.random() > 0.3) createCoinLine(lanes[2], spawnZ);
+            } else {
+                // Just a line of coins
+                createCoinLine(lanes[0], spawnZ);
+            }
+        }
+
+        function createObstacle(lane, z) {
+            const mesh = new THREE.Mesh(obsGeo, obsMat);
+            mesh.position.set(lane * LANE_WIDTH, 0, z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            
+            // Add visual detail (neon outline)
+            const edges = new THREE.EdgesGeometry(obsGeo);
+            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3 }));
+            mesh.add(line);
+
+            scene.add(mesh);
+            obstacles.push({ mesh, box: new THREE.Box3(), active: true });
+        }
+
+        function createCoinLine(lane, zStart) {
+            const count = Math.floor(Math.random() * 4) + 3; // 3 to 6 coins
+            for(let i=0; i<count; i++) {
+                const mesh = new THREE.Mesh(coinGeo, coinMat);
+                mesh.position.set(lane * LANE_WIDTH, 0.5, zStart - (i * 3));
+                mesh.rotation.x = Math.PI / 2; // Stand upright
+                mesh.castShadow = true;
+                scene.add(mesh);
+                coinsList.push({ mesh, box: new THREE.Box3(), active: true });
+            }
+        }
+
+        // --- 5. INPUT & CONTROLS ---
+        function moveLeft() { if (targetLane > -1) targetLane--; }
+        function moveRight() { if (targetLane < 1) targetLane++; }
+        
+        function jump() {
+            if (!isJumping && !isDucking) {
+                isJumping = true;
+                velocityY = JUMP_POWER;
+                sfx.jump();
+            }
+        }
+
+        function duck() {
+            if (!isJumping && !isDucking) {
+                isDucking = true;
+                player.scale.y = 0.4; // Squish
+                duckTimer = 35; 
+            } else if (isJumping) {
+                // Ground slam if in air
+                velocityY -= JUMP_POWER * 1.2; 
+            }
+        }
+
+        // Keyboard
+        window.addEventListener('keydown', (e) => {
+            if (gameState !== 'playing') return;
+            switch(e.code) {
+                case 'ArrowLeft': case 'KeyA': moveLeft(); break;
+                case 'ArrowRight': case 'KeyD': moveRight(); break;
+                case 'ArrowUp': case 'KeyW': case 'Space': jump(); break;
+                case 'ArrowDown': case 'KeyS': duck(); break;
+            }
+        });
+
+        // Touch (Mobile Swipes)
+        let touchStartX = 0, touchStartY = 0;
+        window.addEventListener('touchstart', e => {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        }, {passive: false});
+
+        window.addEventListener('touchmove', e => {
+            if(gameState === 'playing') e.preventDefault(); // Stop page scroll
+        }, {passive: false});
+
+        window.addEventListener('touchend', e => {
+            if (gameState !== 'playing') return;
+            const dX = e.changedTouches[0].clientX - touchStartX;
+            const dY = e.changedTouches[0].clientY - touchStartY;
+            
+            // Determine swipe direction based on largest delta
+            if (Math.abs(dX) > Math.abs(dY) && Math.abs(dX) > 30) {
+                dX > 0 ? moveRight() : moveLeft();
+            } else if (Math.abs(dY) > 30) {
+                dY > 0 ? duck() : jump();
+            }
+        });
+
+        function handleGameOver() {
+            gameState = 'gameover';
+            sfx.crash();
+            ui.bgm.pause();
+            totalCoins += sessionCoins;
+            localStorage.setItem('met4_total_coins', totalCoins);
+            
+            ui.hud.classList.add('hidden');
+            ui.gameOver.classList.remove('hidden');
+            ui.goScore.innerText = Math.floor(sessionScore);
+            ui.goCoins.innerText = "+" + sessionCoins;
+            
+            // Dramatic fail animation
+            player.rotation.z = Math.PI / 2;
+            player.position.y = 0.5;
+        }
+
+        // --- 6. MAIN RENDER LOOP ---
+        const clock = new THREE.Clock();
+        let spawnTimer = 0;
+        let globalTime = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            globalTime += delta;
+
+            if (gameState === 'playing') {
+                // Difficulty Scaling
+                speedMultiplier += 0.0001; 
+                let step = currentSpeed * speedMultiplier;
+                
+                // Score updates
+                sessionScore += step * 10;
+                if (Math.floor(sessionScore) % 10 === 0) updateHUD();
+
+                // Spawning Logic
+                spawnTimer -= step;
+                if (spawnTimer <= 0) {
+                    spawnWorldRow();
+                    spawnTimer = 25 + (Math.random() * 10);
+                }
+
+                // Floor grid animation
+                gridHelper.position.z += step;
+                if(gridHelper.position.z > -20) gridHelper.position.z = -50;
+
+                // --- Player Physics & Smoothing ---
+                // Horizontal Lerp
+                const targetX = targetLane * LANE_WIDTH;
+                player.position.x += (targetX - player.position.x) * 0.25;
+
+                // Vertical Jump Logic
+                if (isJumping) {
+                    player.position.y += velocityY;
+                    velocityY -= GRAVITY;
+                    if (player.position.y <= 0) {
+                        player.position.y = 0;
+                        isJumping = false;
+                        velocityY = 0;
+                    }
+                }
+
+                // Duck Logic
+                if (isDucking) {
+                    duckTimer--;
+                    if (duckTimer <= 0) {
+                        isDucking = false;
+                        player.scale.y = 1;
+                    }
+                }
+
+                // Update Hitbox (Slightly smaller than visual mesh for forgiving gameplay)
+                playerBox.setFromObject(player);
+                playerBox.expandByScalar(-0.15);
+
+                // --- Environment Movement & Collision ---
+                // Obstacles
+                for (let i = obstacles.length - 1; i >= 0; i--) {
+                    let obs = obstacles[i];
+                    if (!obs.active) continue;
+
+                    obs.mesh.position.z += step;
+                    obs.box.setFromObject(obs.mesh);
+
+                    // Crash
+                    if (playerBox.intersectsBox(obs.box)) {
+                        handleGameOver();
+                    }
+
+                    // Cleanup memory if behind camera
+                    if (obs.mesh.position.z > camera.position.z + 5) {
+                        scene.remove(obs.mesh);
+                        obstacles.splice(i, 1);
+                    }
+                }
+
+                // Coins
+                for (let i = coinsList.length - 1; i >= 0; i--) {
+                    let c = coinsList[i];
+                    if (!c.active) continue;
+
+                    c.mesh.position.z += step;
+                    
+                    // Idle spin animation
+                    c.mesh.rotation.z += 0.05;
+                    c.mesh.rotation.x += 0.02;
+                    c.box.setFromObject(c.mesh);
+
+                    // Collect
+                    if (playerBox.intersectsBox(c.box)) {
+                        c.active = false;
+                        scene.remove(c.mesh);
+                        coinsList.splice(i, 1);
+                        sessionCoins++;
+                        sessionScore += 50;
+                        updateHUD();
+                        sfx.coin();
+                    } 
+                    // Cleanup
+                    else if (c.mesh.position.z > camera.position.z + 5) {
+                        scene.remove(c.mesh);
+                        coinsList.splice(i, 1);
+                    }
+                }
+            } 
+            else if (gameState === 'menu' || gameState === 'shop') {
+                // Menu background animation
+                gridHelper.position.z += 0.05;
+                if(gridHelper.position.z > -20) gridHelper.position.z = -50;
+                
+                // Slow rotation of player to show off the texture
+                player.rotation.y = Math.sin(globalTime) * 0.3;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // --- 7. SHOP & UI LOGIC ---
+        function renderShop() {
+            ui.shopCoins.innerText = totalCoins;
+            ui.shopGrid.innerHTML = '';
+
+            characters.forEach(char => {
+                const isSelected = char.id === selectedCharId;
+                const canAfford = totalCoins >= char.price;
+                
+                let btnClass, btnText, btnAction;
+                
+                if (isSelected) {
+                    btnClass = 'btn-disabled';
+                    btnText = 'EQUIPPED';
+                    btnAction = '';
+                } else if (char.unlocked) {
+                    btnClass = 'btn-action';
+                    btnText = 'EQUIP';
+                    btnAction = `selectCharacter(${char.id})`;
+                } else {
+                    btnClass = canAfford ? 'btn-play' : 'btn-disabled opacity-60';
+                    btnText = `BUY (${char.price})`;
+                    btnAction = canAfford ? `buyCharacter(${char.id})` : '';
+                }
+
+                const cardHTML = `
+                    <div class="bg-indigo-900/40 rounded-2xl p-4 border ${isSelected ? 'border-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.4)]' : 'border-indigo-500/30'} flex flex-col items-center gap-3 relative transition-transform hover:-translate-y-1">
+                        ${!char.unlocked ? '<div class="absolute top-2 right-2 text-xl z-10 bg-black/50 p-1 rounded-full">🔒</div>' : ''}
+                        
+                        <div class="w-full aspect-square rounded-xl border-2 ${isSelected ? 'border-cyan-400' : 'border-indigo-400/50'} overflow-hidden relative bg-black/30 flex items-center justify-center">
+                            <!-- Using crossOrigin to ensure images load correctly in standard HTML img tag as well -->
+                            <img crossorigin="anonymous" src="${char.url}" alt="${char.name}" class="w-full h-full object-cover">
+                            ${!char.unlocked ? '<div class="absolute inset-0 bg-indigo-950/70 backdrop-blur-[1px]"></div>' : ''}
+                        </div>
+                        
+                        <h3 class="text-white font-bold text-center text-sm uppercase tracking-wide h-10 flex items-center justify-center leading-tight">
+                            ${char.name}
+                        </h3>
+                        
+                        <button class="btn-3d ${btnClass} w-full py-2 rounded-lg font-black tracking-widest text-xs mt-auto" 
+                                ${btnAction ? `onclick="${btnAction}"` : 'disabled'}>
+                            ${btnText}
+                        </button>
+                    </div>
+                `;
+                ui.shopGrid.insertAdjacentHTML('beforeend', cardHTML);
+            });
+        }
+
+        window.selectCharacter = function(id) {
+            selectedCharId = id;
+            localStorage.setItem('met4_selected_char', id);
+            updatePlayerTexture(); // Update 3D Model immediately
+            renderShop(); // Refresh UI
+        }
+
+        window.buyCharacter = function(id) {
+            const char = characters.find(c => c.id === id);
+            if (totalCoins >= char.price && !char.unlocked) {
+                totalCoins -= char.price;
+                char.unlocked = true;
+                
+                localStorage.setItem('met4_total_coins', totalCoins);
+                const unlockedIds = characters.filter(c => c.unlocked).map(c => c.id);
+                localStorage.setItem('met4_unlocked_chars', JSON.stringify(unlockedIds));
+                
+                selectCharacter(id);
+            }
+        }
+
+        // Navigation Bindings
+        document.getElementById('btn-play').addEventListener('click', () => {
+            ui.menu.classList.add('hidden');
+            ui.hud.classList.remove('hidden');
+            gameState = 'playing';
+            if(!isMuted) {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                ui.bgm.play().catch(e=>console.log("Audio prevented"));
+            }
+            initGame();
+        });
+
+        document.getElementById('btn-shop').addEventListener('click', () => {
+            ui.menu.classList.add('hidden');
+            ui.shop.classList.remove('hidden');
+            renderShop();
+        });
+
+        document.getElementById('btn-shop-back').addEventListener('click', () => {
+            ui.shop.classList.add('hidden');
+            ui.menu.classList.remove('hidden');
+        });
+
+        document.getElementById('btn-restart').addEventListener('click', () => {
+            ui.gameOver.classList.add('hidden');
+            ui.hud.classList.remove('hidden');
+            gameState = 'playing';
+            if(!isMuted) {
+                ui.bgm.currentTime = 0;
+                ui.bgm.play().catch(e=>console.log("Audio prevented"));
+            }
+            initGame();
+        });
+
+        document.getElementById('btn-menu').addEventListener('click', () => {
+            ui.gameOver.classList.add('hidden');
+            ui.menu.classList.remove('hidden');
+            
+            // Reset player visual state for menu
+            player.position.set(0,0,0);
+            player.rotation.set(0,0,0);
+            updatePlayerTexture();
+            gameState = 'menu';
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Initialize Application Sequence
+        window.onload = () => {
+            // Load base textures early
+            updatePlayerTexture();
+            
+            // Start render loop
+            animate();
+            
+            // Intro sequence timing
+            setTimeout(() => {
+                ui.intro.style.opacity = '0';
+                setTimeout(() => {
+                    ui.intro.classList.add('hidden');
+                    ui.menu.classList.remove('hidden');
+                    gameState = 'menu';
+                }, 800); // Wait for fade transition
+            }, 2500); // Show intro for 2.5 seconds
+        };
+    </script>
+</body>
+</html>
